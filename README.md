@@ -1,6 +1,6 @@
 # a11yscout
 
-WCAG 2.0 A/AA accessibility audits for GitHub pull requests. Built for indie SaaS founders shipping on Vercel/Netlify preview deployments.
+WCAG 2.1 A/AA accessibility audits for GitHub pull requests. Built for indie SaaS founders shipping on Vercel/Netlify preview deployments.
 
 ## Packages
 

@@ -7,5 +7,5 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   target: "node20",
-  external: ["playwright", "@axe-core/playwright", "axe-core", "@a11yscout/source-mapper"],
+  external: ["vite", "@babel/core", "@a11yscout/source-mapper"],
 });

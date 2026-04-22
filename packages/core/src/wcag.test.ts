@@ -20,13 +20,30 @@ describe("tagsToWcag", () => {
 });
 
 describe("axeTagsForLevel", () => {
-  it("includes AA tags for AA level", () => {
-    expect(axeTagsForLevel("AA")).toContain("wcag2aa");
-    expect(axeTagsForLevel("AA")).toContain("wcag2a");
+  it("includes WCAG 2.0 and 2.1 AA tags for AA level", () => {
+    const tags = axeTagsForLevel("AA");
+    expect(tags).toContain("wcag2a");
+    expect(tags).toContain("wcag2aa");
+    expect(tags).toContain("wcag21a");
+    expect(tags).toContain("wcag21aa");
   });
 
   it("excludes AAA for AA level", () => {
     expect(axeTagsForLevel("AA")).not.toContain("wcag2aaa");
+    expect(axeTagsForLevel("AA")).not.toContain("wcag21aaa");
+  });
+});
+
+describe("WCAG 2.1 criteria coverage", () => {
+  it("includes new 2.1 AA criteria", () => {
+    expect(WCAG_CRITERIA["1.4.11"]?.level).toBe("AA");
+    expect(WCAG_CRITERIA["1.4.13"]?.level).toBe("AA");
+    expect(WCAG_CRITERIA["4.1.3"]?.level).toBe("AA");
+  });
+
+  it("includes new 2.1 A criteria", () => {
+    expect(WCAG_CRITERIA["2.5.1"]?.level).toBe("A");
+    expect(WCAG_CRITERIA["2.5.3"]?.level).toBe("A");
   });
 });
 

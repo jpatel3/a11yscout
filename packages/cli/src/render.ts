@@ -15,7 +15,7 @@ export function renderReport(report: AuditReport): string {
   const { summary } = report;
 
   lines.push("");
-  lines.push(pc.bold(`WCAG 2.0 ${report.level} audit — ${report.results.length} page(s) scanned`));
+  lines.push(pc.bold(`WCAG 2.1 ${report.level} audit — ${report.results.length} page(s) scanned`));
   lines.push(pc.dim(`${report.startedAt}`));
   lines.push("");
 
@@ -67,6 +67,11 @@ function renderViolation(violation: Violation): string[] {
     : "";
   const nodes = violation.nodes.slice(0, 3).map((n) => {
     const selector = n.target.join(" ");
+    if (n.sourceLocation) {
+      const { file, line, column } = n.sourceLocation;
+      const location = pc.cyan(`${file}:${line}:${column}`);
+      return `      ${location}  ${pc.dim(selector)}`;
+    }
     return pc.dim(`      ${selector}`);
   });
   const more =

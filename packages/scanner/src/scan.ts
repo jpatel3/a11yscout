@@ -6,9 +6,11 @@ import {
   type ScanResult,
   type ScanTarget,
   type Severity,
+  type SourceLocation,
   type Violation,
   type WcagLevel,
 } from "@a11yscout/core";
+import { SOURCE_ATTR, decodeSourceLocation } from "@a11yscout/source-mapper";
 import { chromium, type Browser, type Page } from "playwright";
 
 const DEFAULT_VIEWPORT = { width: 1280, height: 800 };
@@ -19,6 +21,8 @@ export interface ScanOptions {
   screenshot?: boolean;
   timeoutMs?: number;
   userAgent?: string;
+  /** Disable source-location lookup via the a11yscout data attribute. */
+  resolveSource?: boolean;
 }
 
 export interface ScannerHandle {
@@ -29,6 +33,7 @@ export interface ScannerHandle {
 export async function createScanner(options: ScanOptions): Promise<ScannerHandle> {
   const browser: Browser = await chromium.launch({ headless: true });
   const timeout = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const resolveSource = options.resolveSource ?? true;
 
   async function scan(target: ScanTarget): Promise<ScanResult> {
     const started = Date.now();
@@ -53,19 +58,31 @@ export async function createScanner(options: ScanOptions): Promise<ScannerHandle
         ? (await page.screenshot({ fullPage: true, type: "png" })).toString("base64")
         : undefined;
 
-      const violations: Violation[] = analysis.violations.map((v) => ({
-        ruleId: v.id,
-        impact: (v.impact ?? "minor") as Severity,
-        description: v.description,
-        help: v.help,
-        helpUrl: v.helpUrl,
-        wcag: tagsToWcag(v.tags),
-        nodes: v.nodes.map((n) => ({
-          target: n.target.map(String),
-          html: n.html,
-          failureSummary: n.failureSummary ?? "",
-        })),
-      }));
+      const violations: Violation[] = [];
+      for (const v of analysis.violations) {
+        const nodes = [];
+        for (const n of v.nodes) {
+          const target = n.target.map(String);
+          const sourceLocation = resolveSource
+            ? await lookupSourceLocation(page, target)
+            : undefined;
+          nodes.push({
+            target,
+            html: n.html,
+            failureSummary: n.failureSummary ?? "",
+            ...(sourceLocation ? { sourceLocation } : {}),
+          });
+        }
+        violations.push({
+          ruleId: v.id,
+          impact: (v.impact ?? "minor") as Severity,
+          description: v.description,
+          help: v.help,
+          helpUrl: v.helpUrl,
+          wcag: tagsToWcag(v.tags),
+          nodes,
+        });
+      }
 
       return {
         target,
@@ -89,6 +106,38 @@ export async function createScanner(options: ScanOptions): Promise<ScannerHandle
   }
 
   return { scan, close };
+}
+
+async function lookupSourceLocation(
+  page: Page,
+  selectorChain: string[],
+): Promise<SourceLocation | undefined> {
+  if (selectorChain.length === 0) return undefined;
+  const selector = selectorChain[selectorChain.length - 1] as string;
+
+  try {
+    const raw = await page.evaluate(
+      ({ selector, attr }) => {
+        const el = document.querySelector(selector);
+        if (!el) return null;
+        const direct = el.getAttribute(attr);
+        if (direct) return direct;
+        const ancestor = el.closest(`[${attr}]`);
+        return ancestor ? ancestor.getAttribute(attr) : null;
+      },
+      { selector, attr: SOURCE_ATTR },
+    );
+    if (!raw) return undefined;
+    const decoded = decodeSourceLocation(raw);
+    if (!decoded) return undefined;
+    return {
+      file: decoded.file,
+      line: decoded.line,
+      column: decoded.column,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 async function closePage(page: Page): Promise<void> {

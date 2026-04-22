@@ -10,7 +10,7 @@ const program = new Command();
 
 program
   .name("a11y-audit")
-  .description("WCAG 2.0 A/AA accessibility audits powered by axe-core + Playwright")
+  .description("WCAG 2.1 A/AA accessibility audits powered by axe-core + Playwright")
   .version("0.0.0")
   .argument("<urls...>", "One or more URLs to audit")
   .option("-l, --level <level>", "WCAG conformance level (A, AA, AAA)", "AA")
@@ -37,7 +37,7 @@ program
     }));
 
     if (!opts.silent) {
-      console.error(pc.dim(`Scanning ${urls.length} URL(s) at WCAG 2.0 ${level}...`));
+      console.error(pc.dim(`Scanning ${urls.length} URL(s) at WCAG 2.1 ${level}...`));
     }
 
     const report = await runAudit(targets, {
