@@ -1,0 +1,22 @@
+{
+  "name": "a11yscout",
+  "version": "0.0.0",
+  "private": true,
+  "description": "WCAG 2.0 A/AA accessibility audits for GitHub pull requests",
+  "packageManager": "pnpm@10.8.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' build",
+    "typecheck": "pnpm -r --filter './packages/*' typecheck",
+    "test": "pnpm -r --filter './packages/*' test",
+    "clean": "pnpm -r exec rm -rf dist node_modules/.cache"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8",
+    "@types/node": "^20.17.6"
+  }
+}
