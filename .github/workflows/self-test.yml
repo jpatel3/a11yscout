@@ -1,0 +1,75 @@
+name: self-test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  action-e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: corepack enable
+
+      - name: Install workspace + Chromium
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          pnpm --filter @a11yscout/scanner exec playwright install chromium --with-deps
+
+      - name: Build Vite fixture
+        working-directory: fixtures/vite-app
+        run: pnpm build
+
+      - name: Serve fixture
+        working-directory: fixtures/vite-app/dist
+        run: |
+          python3 -m http.server 4321 &
+          echo "FIXTURE_PID=$!" >> $GITHUB_ENV
+          sleep 1
+          curl -sf -o /dev/null http://127.0.0.1:4321/
+
+      - name: Run a11yscout action against fixture
+        id: audit
+        uses: ./
+        with:
+          urls: http://127.0.0.1:4321/
+          level: AA
+          fail-on: none
+          comment-on-pr: ${{ github.event_name == 'pull_request' }}
+
+      - name: Assert fixture produced expected violations with source locations
+        run: |
+          node -e "
+            const r = require('./a11yscout-report/a11y-report.json');
+            const total = r.summary.totalViolations;
+            if (total < 3) { console.error('expected >=3 violations, got', total); process.exit(1); }
+            const mapped = r.results.flatMap(s => s.violations).flatMap(v => v.nodes).filter(n => n.sourceLocation);
+            if (mapped.length === 0) { console.error('expected source locations via vite plugin'); process.exit(1); }
+            console.log('OK: ' + total + ' violations, ' + mapped.length + ' source-mapped');
+          "
+
+      - name: Stop fixture server
+        if: always()
+        run: kill $FIXTURE_PID || true

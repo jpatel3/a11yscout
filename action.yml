@@ -1,0 +1,147 @@
+name: "a11yscout"
+description: "WCAG 2.1 A/AA accessibility audits for pull requests"
+author: "a11yscout"
+branding:
+  icon: "eye"
+  color: "purple"
+
+inputs:
+  urls:
+    description: "URL(s) to scan. Newline- or comma-separated."
+    required: true
+  level:
+    description: "WCAG conformance level (A or AA)."
+    required: false
+    default: "AA"
+  fail-on:
+    description: "Minimum impact that fails the job (minor | moderate | serious | critical | none)."
+    required: false
+    default: "serious"
+  wait-for:
+    description: "CSS selector to wait for before scanning."
+    required: false
+    default: ""
+  viewport:
+    description: "Viewport size as WxH."
+    required: false
+    default: "1280x800"
+  screenshot:
+    description: "Capture full-page screenshots in the JSON report."
+    required: false
+    default: "false"
+  comment-on-pr:
+    description: "Post a summary comment on the pull request."
+    required: false
+    default: "true"
+  upload-artifact:
+    description: "Upload the JSON + SARIF report as a workflow artifact."
+    required: false
+    default: "true"
+  github-token:
+    description: "Token used to post PR comments."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  report-path:
+    description: "Path to the JSON audit report."
+    value: ${{ steps.audit.outputs.report-path }}
+  sarif-path:
+    description: "Path to the SARIF report."
+    value: ${{ steps.audit.outputs.sarif-path }}
+  total-violations:
+    description: "Total number of violation occurrences."
+    value: ${{ steps.audit.outputs.total-violations }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+
+    - name: Enable Corepack
+      shell: bash
+      run: corepack enable
+
+    - name: Install a11yscout workspace
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        pnpm install --frozen-lockfile --filter '@a11yscout/cli...'
+        pnpm --filter @a11yscout/cli build
+
+    - name: Install Playwright Chromium
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: pnpm --filter @a11yscout/scanner exec playwright install chromium --with-deps
+
+    - name: Run a11y audit
+      id: audit
+      shell: bash
+      env:
+        INPUT_URLS: ${{ inputs.urls }}
+        INPUT_LEVEL: ${{ inputs.level }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_WAIT_FOR: ${{ inputs.wait-for }}
+        INPUT_VIEWPORT: ${{ inputs.viewport }}
+        INPUT_SCREENSHOT: ${{ inputs.screenshot }}
+      run: |
+        set +e
+        mkdir -p "$GITHUB_WORKSPACE/a11yscout-report"
+
+        urls=$(echo "$INPUT_URLS" | tr ',\n' ' ')
+        args=(--level "$INPUT_LEVEL" --fail-on "$INPUT_FAIL_ON" --out "$GITHUB_WORKSPACE/a11yscout-report")
+        [ -n "$INPUT_WAIT_FOR" ] && args+=(--wait-for "$INPUT_WAIT_FOR")
+        [ -n "$INPUT_VIEWPORT" ] && args+=(--viewport "$INPUT_VIEWPORT")
+        [ "$INPUT_SCREENSHOT" = "true" ] && args+=(--screenshot)
+
+        node ${{ github.action_path }}/packages/cli/dist/index.js $urls "${args[@]}"
+        exit_code=$?
+
+        json_path="$GITHUB_WORKSPACE/a11yscout-report/a11y-report.json"
+        sarif_path="$GITHUB_WORKSPACE/a11yscout-report/a11y-report.sarif"
+        total=$(node -e "const r = require('$json_path'); console.log(r.summary.totalViolations)" 2>/dev/null || echo 0)
+
+        {
+          echo "report-path=$json_path"
+          echo "sarif-path=$sarif_path"
+          echo "total-violations=$total"
+          echo "exit-code=$exit_code"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Write job summary
+      shell: bash
+      if: always()
+      env:
+        JSON_PATH: ${{ steps.audit.outputs.report-path }}
+      run: |
+        node ${{ github.action_path }}/packages/action/scripts/summary.cjs "$JSON_PATH" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload artifact
+      if: always() && inputs.upload-artifact == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: a11yscout-report
+        path: ${{ github.workspace }}/a11yscout-report/
+        if-no-files-found: ignore
+
+    - name: Post PR comment
+      if: always() && inputs.comment-on-pr == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      env:
+        JSON_PATH: ${{ steps.audit.outputs.report-path }}
+        ACTION_PATH: ${{ github.action_path }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const { postComment } = require(`${process.env.ACTION_PATH}/packages/action/scripts/comment.cjs`);
+          await postComment({ github, context, jsonPath: process.env.JSON_PATH });
+
+    - name: Exit with audit result
+      if: steps.audit.outputs.exit-code != '0'
+      shell: bash
+      run: |
+        echo "::error::a11y violations at or above impact '${{ inputs.fail-on }}' — see job summary."
+        exit 1
