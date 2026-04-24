@@ -70,7 +70,7 @@ runs:
       working-directory: ${{ github.action_path }}
       run: |
         pnpm install --frozen-lockfile --filter '@a11yscout/cli...'
-        pnpm --filter @a11yscout/cli build
+        pnpm --filter '@a11yscout/cli...' build
 
     - name: Install Playwright Chromium
       shell: bash
