@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { prettifySelector } = require("./util.cjs");
 
 const MARKER = "<!-- a11yscout-report -->";
 
@@ -28,7 +29,7 @@ function renderBody(report) {
       url: r.target.url,
       wcag: v.wcag.map((c) => `${c.id} ${c.level}`).join(", "),
       source: v.nodes.find((n) => n.sourceLocation)?.sourceLocation,
-      selector: v.nodes[0]?.target?.join(" ") ?? "",
+      selector: prettifySelector(v.nodes[0]?.target?.join(" ") ?? ""),
     })),
   );
 

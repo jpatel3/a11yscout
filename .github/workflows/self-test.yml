@@ -73,3 +73,20 @@ jobs:
       - name: Stop fixture server
         if: always()
         run: kill $FIXTURE_PID || true
+
+  action-from-tag:
+    # Validates the Marketplace install path: pulls the action from the @v1 tag
+    # exactly the way external users do. Catches regressions in the published
+    # release that uses: ./ would miss (e.g. the v1.0.1 workspace-deps build bug).
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Run a11yscout from the published v1 tag
+        uses: jpatel3/a11yscout@v1
+        with:
+          urls: https://example.com
+          level: AA
+          fail-on: none
+          comment-on-pr: "false"
+          upload-artifact: "false"

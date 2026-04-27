@@ -29,7 +29,7 @@ jobs:
 |---|---|---|
 | `urls` | *(required)* | URL(s) to scan, newline- or comma-separated |
 | `level` | `AA` | WCAG conformance level (`A` or `AA`) |
-| `fail-on` | `serious` | Impact threshold to fail the job (`minor`, `moderate`, `serious`, `critical`, `none`) |
+| `fail-on` | `none` | Impact threshold to fail the job (`minor`, `moderate`, `serious`, `critical`, `none`). Default is report-only; set to `serious` once you've fixed the existing violations and want to enforce. |
 | `wait-for` | — | CSS selector to wait for before scanning (SPAs) |
 | `viewport` | `1280x800` | Viewport size |
 | `screenshot` | `false` | Capture full-page screenshots |
